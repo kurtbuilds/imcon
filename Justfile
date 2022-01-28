@@ -33,8 +33,11 @@ _download_library:
     sudo mkdir -p "$PDFIUM_LIB"
     sudo cp -r "$DOWNLOAD_DIR/lib/" "$PDFIUM_LIB"
 
+install_with_library:
+    @just _download_library
+    @just install
+
 install:
-    # @just _download_library
     cargo install --path .
 
 bootstrap:

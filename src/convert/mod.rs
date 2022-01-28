@@ -12,7 +12,7 @@ use pdfium_render::page::PdfPage;
 use pdfium_render::pdfium::Pdfium;
 use std::sync::Once;
 
-enum ImageData {
+pub enum ImageData {
     Pdf,
 }
 
@@ -24,24 +24,21 @@ pub struct Image {
     target_height: Option<usize>,
     max_width: Option<usize>,
     max_height: Option<usize>,
+    scale: Option<f32>,
 }
 
 
 impl Image {
-    pub fn new<S: Into<PathBuf>>(path: S) -> Self {
+    pub fn new<S: Into<PathBuf>>(path: S, data_type: ImageData) -> Self {
         let path = path.into();
-        match path.extension().expect("No file extension.").to_string_lossy().as_ref() {
-            "pdf" => {
-                Image {
-                    inner: ImageData::Pdf,
-                    input_path: path,
-                    target_width: None,
-                    target_height: None,
-                    max_width: None,
-                    max_height: None,
-                }
-            }
-            _ => panic!("Unsupported file extension."),
+        Image {
+            inner: data_type,
+            input_path: path,
+            target_width: None,
+            scale: None,
+            target_height: None,
+            max_width: None,
+            max_height: None,
         }
     }
 
@@ -49,7 +46,7 @@ impl Image {
         unimplemented!()
     }
 
-    pub fn save_pages_to_path(&self, path_template: &str) {
+    pub fn save_pages_to_path(&self, path_template: &str) -> Result<(), std::io::Error> {
         match self.inner {
             ImageData::Pdf => {
                 let mut config = PdfBitmapConfig::new();
@@ -65,9 +62,24 @@ impl Image {
                 if let Some(h) = self.max_height {
                     config = config.set_maximum_height(h as u16);
                 }
-                let bind = Pdfium::bind_to_system_library().unwrap();
+                if let Some(s) = self.scale {
+                    if s > 100.0 {
+                        config = config.scale_page_by_factor(s / 100.0);
+                    } else {
+                        config = config.scale_page_by_factor(s);
+                    }
+                }
+                let bind = Pdfium::bind_to_system_library()
+                    .expect("Failed to bind to Pdfium system library");
                 let pdfium = Pdfium::new(bind);
-                let doc = pdfium.load_pdf_from_file(self.input_path.to_string_lossy().as_ref(), None).unwrap();
+                if !self.input_path.exists() {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::NotFound,
+                        "File not found",
+                    ));
+                }
+                let doc = pdfium.load_pdf_from_file(self.input_path.to_string_lossy().as_ref(), None)
+                    .expect("Pdfium failed to load pdf");
                 let places = doc.pages().len().to_string().len();
                 doc.pages().iter().enumerate().for_each(|(i, page)| {
                     let path = path_template
@@ -80,6 +92,7 @@ impl Image {
                 })
             }
         }
+        Ok(())
     }
 
     pub fn target_width(&mut self, width: usize) -> &mut Self {
@@ -97,6 +110,11 @@ impl Image {
 
     pub fn max_height(&mut self, h: usize) -> &mut Self {
         self.max_height = Some(h);
+        self
+    }
+
+    pub fn scale(&mut self, s: f32) -> &mut Self {
+        self.scale = Some(s);
         self
     }
 }
