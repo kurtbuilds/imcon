@@ -14,7 +14,27 @@ alias r := run
 release:
     cargo build --release
 
+_download_library:
+    #!/usr/bin/env bash
+    set -euxo pipefail
+    export OS={{ if os() == "macos" { "mac" } else if os() == "linux" { "linux" } else { "unrecognized OS" } }}
+    export ARCH={{ if arch() == "aarch64" { "arm64" } else { "unrecognized ARCH" } }}
+    export INSTALL_DIR=/usr/local
+    export DOWNLOAD_DIR=$(mktemp -d)
+
+    curl https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-$OS-$ARCH.tgz -L -o "$DOWNLOAD_DIR/pdfium.tgz"
+    tar xzvf "$DOWNLOAD_DIR/pdfium.tgz" -C "$DOWNLOAD_DIR"
+
+    export PDFIUM_INCLUDE="$INSTALL_DIR/include/pdfium"
+    sudo mkdir -p "$PDFIUM_INCLUDE"
+    sudo cp -r "$DOWNLOAD_DIR/include/" "$PDFIUM_INCLUDE"
+
+    export PDFIUM_LIB="$INSTALL_DIR/lib"
+    sudo mkdir -p "$PDFIUM_LIB"
+    sudo cp -r "$DOWNLOAD_DIR/lib/" "$PDFIUM_LIB"
+
 install:
+    # @just _download_library
     cargo install --path .
 
 bootstrap:

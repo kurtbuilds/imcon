@@ -23,7 +23,7 @@ pub struct Image {
     target_width: Option<usize>,
     target_height: Option<usize>,
     max_width: Option<usize>,
-    max_height: Option<u16>,
+    max_height: Option<usize>,
 }
 
 
@@ -68,10 +68,11 @@ impl Image {
                 let bind = Pdfium::bind_to_system_library().unwrap();
                 let pdfium = Pdfium::new(bind);
                 let doc = pdfium.load_pdf_from_file(self.input_path.to_string_lossy().as_ref(), None).unwrap();
+                let places = doc.pages().len().to_string().len();
                 doc.pages().iter().enumerate().for_each(|(i, page)| {
                     let path = path_template
                         .replace("{}", self.input_path.file_stem().unwrap().to_string_lossy().as_ref())
-                        .replace("{i}", i.to_string().as_ref());
+                        .replace("{i}", format!("{:0places$}", i+1, places=places).as_ref());
                     page.get_bitmap_with_config(&config).unwrap()
                         .as_image()
                         .to_rgba8()
@@ -79,5 +80,23 @@ impl Image {
                 })
             }
         }
+    }
+
+    pub fn target_width(&mut self, width: usize) -> &mut Self {
+        self.target_width = Some(width);
+        self
+    }
+    pub fn target_height(&mut self, h: usize) -> &mut Self {
+        self.target_height = Some(h);
+        self
+    }
+    pub fn max_width(&mut self, w: usize) -> &mut Self {
+        self.max_width = Some(w);
+        self
+    }
+
+    pub fn max_height(&mut self, h: usize) -> &mut Self {
+        self.max_height = Some(h);
+        self
     }
 }
