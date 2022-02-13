@@ -29,6 +29,7 @@ Right now it's in a very early stage of development, but it's a work in progress
 Supported file types:
 
 - [x] PDF
+- [ ] HEIC - Work in progress
 - [ ] PNG
 - [ ] JPEG
 - [ ] TIFF
@@ -86,7 +87,7 @@ If you just need `imcon` and already have `pdfium`, you can install it with:
 - [ ] Add support for ICO
 - [ ] Add support for SVG
 - [x] Add support for PDF
-- [x] Add support for HEIC
+- [ ] Add support for HEIC
 - [ ] Add support for WEBP
 - [ ] Support for using imcon as both a CLI and a library.
 - [ ] Build a Python wrapper library.
