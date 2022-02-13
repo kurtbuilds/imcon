@@ -82,8 +82,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .map(|ext| ext.to_str().unwrap_or(""))
         }) {
             Some(ext) => {
-                match ext {
+                match ext.to_lowercase().as_ref() {
                     "pdf" => ImageData::Pdf,
+                    "heic" => ImageData::Heif,
                     _ => { return Err(format!("Unrecognized file format: {}", ext).into()); }
                 }
             }
@@ -118,6 +119,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .to_lowercase()
                     .as_ref() {
                     "pdf" => "png",
+                    "heic" => "png",
                     _ => "png",
                 }
             );
