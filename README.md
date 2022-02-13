@@ -78,7 +78,22 @@ If you just need `imcon` and already have `pdfium`, you can install it with:
 
 # Roadmap
 
-See the [open issues](https://github.com/othneildrew/Best-README-Template/issues) for a full list of proposed features (and known issues).
+- [ ] Add support for PNG
+- [ ] Add support for JPEG
+- [ ] Add support for TIFF
+- [ ] Add support for TGA
+- [ ] Add support for BMP
+- [ ] Add support for ICO
+- [ ] Add support for SVG
+- [x] Add support for PDF
+- [x] Add support for HEIC
+- [ ] Add support for WEBP
+- [ ] Support for using imcon as both a CLI and a library.
+- [ ] Build a Python wrapper library.
+- [ ] Build a Node wrapper library.
+- [ ] Build a Ruby wrapper library.
+- [ ] Write docs on target_width/height vs max_width/height.
+- [ ] Create a Brew formula for installing Pdfium.
 
 # Contributing
 

@@ -12,8 +12,7 @@ use pdfium_render::document::PdfDocument;
 use pdfium_render::page::PdfPage;
 use pdfium_render::pdfium::Pdfium;
 use std::sync::Once;
-use libheif_rs::{Channel, ColorSpace, HeifContext, RgbChroma};
-use libheif_rs::HeifErrorSubCode::NoFtypBox;
+use libheif_rs::{Channel, ColorSpace, HeifContext, HeifError, HeifErrorSubCode, RgbChroma};
 
 pub enum ImageData {
     Pdf,
@@ -63,6 +62,14 @@ fn create_path(path_template: &str, input_path: &PathBuf, page: usize, n_pages: 
         .replace("{i}", format!("{:0places$}", page + 1, places = n_pages).as_ref())
 }
 
+
+fn read_heif_to_buffer(input_path: &PathBuf) -> Result<libheif_rs::Image, HeifError> {
+    let ctx = HeifContext::read_from_file(input_path.to_string_lossy().as_ref())?;
+    let handle = ctx.primary_image_handle()?;
+    let image = handle.decode(ColorSpace::Rgb(RgbChroma::Rgb), false)?;
+    Ok(image)
+}
+
 impl Image {
     pub fn new<S: Into<PathBuf>>(path: S, data_type: ImageData) -> Self {
         let path = path.into();
@@ -108,42 +115,38 @@ impl Image {
                 }).collect()
             }
             ImageData::Heif => {
-                let image = HeifContext::read_from_file(self.input_path.to_string_lossy().as_ref())
-                    .and_then(|ctx| {
-                        let handle = ctx.primary_image_handle()?;
-                        let image = handle.decode(ColorSpace::Rgb(RgbChroma::Rgb), false)?;
-                        let width = image.width(Channel::R).unwrap();
-                        let height = image.height(Channel::R).unwrap();
-                        let bytes = image.bits_per_pixel(Channel::R).unwrap() / 8;
-                        println!("{}x{} {}", width, height, bytes);
-                        let mut imgbuf = image::ImageBuffer::new(width, height);
-                        // for (x, y, pixel) in imgbuf.enumerate_pixels_mut() {
-                        //     let r = image.(x, y, Channel::R).unwrap();
-                        //     let g = image.get_pixel(x, y, Channel::G).unwrap();
-                        //     let b = image.get_pixel(x, y, Channel::B).unwrap();
-                        //     *pixel = image::Rgb([r, g, b]);
-                        // }
-                        Ok(DynamicImage::ImageRgb8(imgbuf))
-                    })
-                    .or_else(|e| {
-                        match e.sub_code {
-                            NoFtypBox => {
-                                println!("Trying backup parse...");
-                                // iOS apparently saves jpgs as a heic file sometimes. Try to load it as a jpg.
-                                // There's probably a better way to do this.
-                                let stream = fs::File::open(self.input_path.to_string_lossy().as_ref())?;
-                                let stream = io::BufReader::new(stream);
-                                return image::load(stream, image::ImageFormat::Jpeg)
-                                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
-                            }
-                            _ => {}
-                        }
-                        Err(io::Error::new(io::ErrorKind::Other, e))
-                    })?;
-                let path = create_path(path_template, &self.input_path, 0, 1);
-                image.save(&path)
-                    .map(|_| println!("{path}: Wrote file."))
-                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+                println!("{}", self.input_path.to_string_lossy());
+                let image = read_heif_to_buffer(&self.input_path)
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+                let width = image.width(Channel::Interleaved)
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+                let height = image.height(Channel::Interleaved)
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+
+                let image = if let Some(w) = self.target_width {
+                    let scaled_height = (height as f32 * w as f32 / width as f32) as usize;
+                    let h = self.target_height.unwrap_or(scaled_height);
+                    image.scale(w as u32, h as u32, None)
+                        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?
+                } else {
+                    image
+                };
+
+                let planes = image.planes();
+                let interleaved_plane = planes.interleaved.unwrap();
+                let pixel_size = interleaved_plane.bits_pre_pixel / 8 as usize;
+
+                let width = image.width(Channel::Interleaved)
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+                let height = image.height(Channel::Interleaved)
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+
+                let mut imgbuf = image::ImageBuffer::new(width, height);
+                imgbuf
+                // let path = create_path(path_template, &self.input_path, 0, 1);
+                // image.save(&path)
+                //     .map(|_| println!("{path}: Wrote file."))
+                //     .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
             }
         }
     }
