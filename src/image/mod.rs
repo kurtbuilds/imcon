@@ -3,8 +3,8 @@ use std::iter::once;
 use std::path::PathBuf;
 use crate::transform::{Resize, Transform};
 use anyhow::Result;
-use crate::image::pdf::{load_all_images, PDFIUM};
 use image::GenericImageView;
+use ::image::imageops::FilterType;
 
 mod pdf;
 mod heif;
@@ -28,7 +28,7 @@ pub struct Metadata {
 
 pub enum DataSource {
     File(PathBuf),
-    Memory(Box<dyn io::Read>),
+    Memory(Vec<u8>),
 }
 
 
@@ -45,13 +45,13 @@ pub struct Image {
 
 
 impl Image {
-    fn new(format: Format, source: DataSource, transforms: Vec<Transform>) -> Self {
+    fn new(format: Format, source: DataSource) -> Self {
         Self {
             format,
             source,
             metadata: None,
             resize: None,
-            transforms,
+            transforms: vec![],
         }
     }
 }
@@ -71,12 +71,16 @@ impl Image {
             "heif" => Format::Heif,
             _ => panic!("File extension unrecognized."),
         };
-        Ok(Self::new(format, DataSource::File(path), vec![]))
+        Ok(Self::new(format, DataSource::File(path)))
     }
 
-    pub fn read<S: io::Read>(reader: S, format: Format) -> Self {
-        Self::new(format, DataSource::Memory(Box::new(reader)), vec![])
+    pub fn read(data: &[u8], format: Format) -> Result<Self> {
+        Ok(Self::new(format, DataSource::Memory(data.to_vec())))
     }
+
+    // pub fn read<S: io::Read + 'static>(reader: S, format: Format) -> Self {
+    //     Self::new(format, DataSource::Memory(Box::new(reader)), vec![])
+    // }
 
     pub fn read_unknown_format<S: io::Read>(reader: S) -> Self {
         unimplemented!()
@@ -92,8 +96,8 @@ impl Image {
             Format::Jpeg => image_rs::load_image(source, ::image::ImageFormat::Jpeg),
         }?;
         if let Some(resize) = resize {
-            let (width, height) = resize.calculate_dimensions(image.width() as usize, image.height() as usize);
-            image = image.resize(width as u32, height as u32, image_rs::imageops::FilterType::Lanczos3);
+            let (width, height) = resize.calculate_dimensions(image.width(), image.height());
+            image = image.resize(width, height, FilterType::Lanczos3);
         }
         image
             .to_rgba8()
@@ -109,17 +113,19 @@ impl Image {
         };
         let iter = match self.format {
             Format::Pdf => pdf::load_all_images(source, None)?,
-            Format::Heif => Box::new(once(heif::load_image(source, None)?)),
-            Format::Png => Box::new(once(image_rs::load_image(source, ::image::ImageFormat::Png)?)),
-            Format::Jpeg => Box::new(once(image_rs::load_image(source, ::image::ImageFormat::Jpeg)?)),
+            Format::Heif => Box::new(once(heif::load_image(source, None))),
+            Format::Png => Box::new(once(image_rs::load_image(source, ::image::ImageFormat::Png))),
+            Format::Jpeg => Box::new(once(image_rs::load_image(source, ::image::ImageFormat::Jpeg))),
         };
-        for (i, mut img) in iter.enumerate() {
+        for (i, mut image) in iter.enumerate() {
+            let mut image = image?;
             if let Some(resize) = &resize {
-                let (width, height) = resize.calculate_dimensions(&image.width() as usize, &image.height() as usize);
-                img = img.resize(width as u32, height as u32, image_rs::imageops::FilterType::Lanczos3);
+                let (width, height) = resize.calculate_dimensions(image.width(), image.height());
+                image = image.resize(width, height, FilterType::Lanczos3);
             }
+            let places = iter.len();
             let path = util::create_path(path_template, &input_fpath, i + 1, places);
-            img.to_rgba8()
+            image.to_rgba8()
                 .save(path)
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
         }

@@ -9,11 +9,11 @@ pub fn load_image(source: DataSource, format: image_rs::ImageFormat) -> Result<D
     match source {
         DataSource::File(path) => image_rs::open(path),
         DataSource::Memory(reader) => {
-            image_rs::io::Reader::new(
+            let mut reader = image_rs::io::Reader::new(
                 Cursor::new(reader)
-            )
-                .with_format(format)
-                .and_then(|image| image.decode())
+            );
+            reader.set_format(format);
+            reader.decode()
         }
     }
         .map_err(|e| anyhow::anyhow!("{}", e))

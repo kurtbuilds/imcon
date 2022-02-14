@@ -9,7 +9,7 @@ pub struct Resize {
 
 
 impl Resize {
-    pub fn calculate_dimensions(&self, current_width: usize, current_height: usize) -> (usize, usize) {
+    pub fn calculate_dimensions(&self, current_width: u32, current_height: u32) -> (u32, u32) {
         let mut width = current_width as f32;
         let mut height = current_height as f32;
         if let Some(scale) = self.scale {
@@ -43,7 +43,7 @@ impl Resize {
             width *= height / current_height as f32;
             height = target_height as f32;
         }
-        (width as usize, height as usize)
+        (width as u32, height as u32)
     }
 }
 
