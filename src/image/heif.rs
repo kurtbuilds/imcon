@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use image::{DynamicImage, ImageBuffer};
 use libheif_rs::{Channel, ColorSpace, HeifContext, HeifError, RgbChroma};
 use crate::image::DataSource;

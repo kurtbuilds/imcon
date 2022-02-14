@@ -1,5 +1,4 @@
 use std::io;
-use std::io::Cursor;
 use std::iter::once;
 use std::path::PathBuf;
 use crate::transform::{Resize, Transform};
@@ -59,7 +58,7 @@ impl Image {
 
 
 impl Image {
-    pub fn open<S: Into<PathBuf>>(path: S) -> Self {
+    pub fn open<S: Into<PathBuf>>(path: S) -> Result<Self> {
         let path = path.into();
         let ext = path.extension()
             .expect("No file extension or file extension unrecognized.")
@@ -72,7 +71,7 @@ impl Image {
             "heif" => Format::Heif,
             _ => panic!("File extension unrecognized."),
         };
-        Self::new(format, DataSource::File(path), vec![])
+        Ok(Self::new(format, DataSource::File(path), vec![]))
     }
 
     pub fn read<S: io::Read>(reader: S, format: Format) -> Self {
@@ -93,7 +92,7 @@ impl Image {
             Format::Jpeg => image_rs::load_image(source, ::image::ImageFormat::Jpeg),
         }?;
         if let Some(resize) = resize {
-            let (width, height) = resize.calculate_dimensions(&image.width() as usize, &image.height() as usize);
+            let (width, height) = resize.calculate_dimensions(image.width() as usize, image.height() as usize);
             image = image.resize(width as u32, height as u32, image_rs::imageops::FilterType::Lanczos3);
         }
         image
@@ -109,11 +108,11 @@ impl Image {
             DataSource::Memory(_) => PathBuf::from("stdin"),
         };
         let iter = match self.format {
-            Format::Pdf => pdf::load_all_images(source, None),
-            Format::Heif => once(heif::load_image(source, None)),
-            Format::Png => once(image_rs::load_image(source, ::image::ImageFormat::Png)),
-            Format::Jpeg => once(image_rs::load_image(source, ::image::ImageFormat::Jpeg)),
-        }?;
+            Format::Pdf => pdf::load_all_images(source, None)?,
+            Format::Heif => Box::new(once(heif::load_image(source, None)?)),
+            Format::Png => Box::new(once(image_rs::load_image(source, ::image::ImageFormat::Png)?)),
+            Format::Jpeg => Box::new(once(image_rs::load_image(source, ::image::ImageFormat::Jpeg)?)),
+        };
         for (i, mut img) in iter.enumerate() {
             if let Some(resize) = &resize {
                 let (width, height) = resize.calculate_dimensions(&image.width() as usize, &image.height() as usize);

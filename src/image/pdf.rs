@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use pdfium_render::bitmap_config::PdfBitmapConfig;
 use pdfium_render::pdfium::Pdfium;
 use crate::image::{DataSource, Image};
@@ -6,7 +5,6 @@ use crate::transform::{Resize, Transform};
 use anyhow::Result;
 use image::{DynamicImage, RgbaImage};
 use pdfium_render::pages::{PdfPageIndex, PdfPages};
-use crate::image::util::create_path;
 use once_cell::sync::Lazy;
 use pdfium_render::document::PdfDocument;
 
@@ -41,7 +39,7 @@ impl Into<PdfBitmapConfig> for &Resize {
 }
 
 
-pub fn load_document<'a>(datasource: DataSource) -> Result<PdfDocument + 'a> {
+pub fn load_document<'a>(datasource: DataSource) -> Result<PdfDocument<'a>> {
     match datasource {
         DataSource::File(path) => {
             if !path.exists() {
@@ -68,7 +66,7 @@ pub fn load_image(datasource: DataSource, i: usize, resize: Option<Resize>) -> R
 }
 
 
-pub fn load_all_images(datasource: DataSource, resize: Option<Resize>) -> Result<Box<Iterator<Item=DynamicImage>>> {
+pub fn load_all_images(datasource: DataSource, resize: Option<Resize>) -> Result<Box<dyn Iterator<Item=DynamicImage>>> {
     let config = resize.map(|r| r.into())
         .unwrap_or(PdfBitmapConfig::new());
     let doc = load_document(datasource)?;
