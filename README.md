@@ -81,8 +81,8 @@ If you just need `imcon` and already have `pdfium`, you can install it with:
 
 - [x] Add support for PDF
 - [x] Add support for HEIC
-- [ ] Add support for PNG
-- [ ] Add support for JPEG
+- [x] Add support for PNG
+- [x] Add support for JPEG
 - [ ] Add support for TIFF
 - [ ] Add support for TGA
 - [ ] Add support for BMP
@@ -134,3 +134,13 @@ These are personal notes on solving problems in the repo, not written with publi
   - exif data
   - # of pages
 - Resize the image 
+
+
+# Future examples
+
+Create a transparent canvas. Prints to stdout. Defaults to .png.
+
+    imcon -w 1024 -h 1024 \#000000ff > canvas.png  # can also be \#000f
+    imcon -w 1024 -h 1024 \#000000ff -o canvas.jpg
+
+    cat icon.png | imcon --stdin-format png --stdout-format jpg

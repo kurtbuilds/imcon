@@ -8,7 +8,7 @@ use clap::Arg;
 use image::ImageFormat;
 use pdfium_render::bitmap_config::PdfBitmapConfig;
 use pdfium_render::pdfium::Pdfium;
-use crate::convert::ImageData;
+use convert::image::Format;
 pub mod error;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -83,8 +83,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }) {
             Some(ext) => {
                 match ext.to_lowercase().as_ref() {
-                    "pdf" => ImageData::Pdf,
-                    "heic" => ImageData::Heif,
+                    "pdf" => Format::Pdf,
+                    "heic" => Format::Heif,
                     _ => { return Err(format!("Unrecognized file format: {}", ext).into()); }
                 }
             }
