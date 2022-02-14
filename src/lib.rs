@@ -1,7 +1,7 @@
 mod image;
 mod transform;
 
-pub use crate::image::{Image, Format};
+pub use crate::image::{Image, Format, DataSource};
 
 
 #[cfg(test)]

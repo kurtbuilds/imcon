@@ -1,21 +1,31 @@
-#![allow(unused)]
-
-pub mod convert;
-
-use std::path::Path;
-use std::sync::Once;
-use clap::Arg;
-use image::ImageFormat;
-use pdfium_render::bitmap_config::PdfBitmapConfig;
-use pdfium_render::pdfium::Pdfium;
-use convert::image::Format;
-pub mod error;
+use std::path::{Path, PathBuf};
+use clap::{Arg, Args};
+use imcon::{Image, Format, DataSource};
+use anyhow::Result;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const NAME: &str = env!("CARGO_PKG_NAME");
 
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn input_format(input: &str, input_format: Option<&str>) -> Result<Format> {
+    if input.starts_with("#") && vec![4, 5, 7, 9].contains(&input.len()) {
+        return Ok(Format::Png)
+    }
+    let ext = input_format.map(String::from).or_else(|| {
+        let input = Path::new(input);
+        input.extension().map(|s| s.to_string_lossy().into_owned())
+    }).map(|s| s.to_lowercase())
+        .ok_or_else(|| anyhow::anyhow!("Could not determine input format"))?;
+    return Ok(match ext.as_ref() {
+        "pdf" => Format::Pdf,
+        "heic" => Format::Heif,
+        "jpeg" | "jpg" => Format::Jpeg,
+        "png" => Format::Png,
+        _ => { return Err(anyhow::anyhow!("Unrecognized file format: {}", ext)); }
+    })
+}
+
+fn main() -> Result<()> {
     let args = clap::App::new(NAME)
         .version(VERSION)
         .arg(Arg::new("input")
@@ -23,9 +33,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .required(true)
             .multiple_values(true)
         )
-        .arg(Arg::new("format")
-            .short('f')
-            .long("format")
+        .arg(Arg::new("output-format")
+            .long("output-format")
             .help("Sets the output format")
             .takes_value(true)
             .conflicts_with("output")
@@ -38,7 +47,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .arg(Arg::new("input-format")
             .long("input-format")
-            .short('i')
             .takes_value(true)
         )
         .arg(Arg::new("scale")
@@ -66,37 +74,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .help("Sets the output file path to use. Use the following placeholders as needed:
               '{}':   input file name without file extension
               '{i}':  number of the output file (starting from 1).
-              '{/}':  input file path without file extension
-              '{.}':  input file name with file extension
+              '{dir}':  input file dir
+              '{filename}':  input file name with file extension
             ")
             .takes_value(true)
-            .conflicts_with("format")
+            .conflicts_with("output-format")
         )
         .get_matches();
 
     let input = args.values_of("input").unwrap();
     for input in input {
-        let data = match args.value_of("input-format").or_else(|| {
-            let input = Path::new(input);
-            input.extension()
-                .map(|ext| ext.to_str().unwrap_or(""))
-        }) {
-            Some(ext) => {
-                match ext.to_lowercase().as_ref() {
-                    "pdf" => Format::Pdf,
-                    "heic" => Format::Heif,
-                    _ => { return Err(format!("Unrecognized file format: {}", ext).into()); }
-                }
-            }
-            None => { return Err("Failed to determine input format".into()); }
-        };
-
-        let mut im = convert::Image::new(input, data);
+        let format = input_format(input, args.value_of("input-format"))?;
+        let mut im = Image::new(format, DataSource::File(PathBuf::from(input)));
         if let Some(width) = args.value_of("width") {
-            im.target_width(width.parse()?);
+            im.set_width(width.parse()?);
         }
         if let Some(height) = args.value_of("height") {
-            im.target_height(height.parse()?);
+            im.set_height(height.parse()?);
         }
         if let Some(scale) = args.value_of("scale") {
             im.scale(scale.parse()?);
@@ -125,7 +119,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
             format!("{}{{i}}.{}", path.file_stem().unwrap().to_string_lossy(), extension)
         });
-        im.save_pages_to_path(&output)?;
+        im.save_all(&output)?;
     }
     Ok(())
 }

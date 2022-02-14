@@ -44,7 +44,7 @@ pub struct Image {
 
 
 impl Image {
-    fn new(format: Format, source: DataSource) -> Self {
+    pub fn new(format: Format, source: DataSource) -> Self {
         Self {
             format,
             source,
