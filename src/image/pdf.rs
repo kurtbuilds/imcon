@@ -3,18 +3,16 @@ use pdfium_render::pdfium::Pdfium;
 use crate::image::{DataSource};
 use crate::transform::{Resize};
 use anyhow::Result;
-use image::{DynamicImage, RgbaImage};
-use pdfium_render::pages::{PdfDocumentPdfPageIterator, PdfPageIndex, PdfPages};
-use once_cell::sync::Lazy;
+use image::{DynamicImage};
+use pdfium_render::pages::{PdfPageIndex};
 use pdfium_render::document::PdfDocument;
-use pdfium_render::page::PdfPage;
 
 
-pub static PDFIUM: Lazy<Pdfium> = Lazy::new(|| {
+fn make_library_binding() -> Pdfium {
     let bind = Pdfium::bind_to_system_library()
         .expect("Failed to bind to Pdfium system library");
     Pdfium::new(bind)
-});
+}
 
 
 impl Into<PdfBitmapConfig> for &Resize {
@@ -40,87 +38,46 @@ impl Into<PdfBitmapConfig> for &Resize {
 }
 
 
-pub fn load_document<'a>(datasource: DataSource) -> Result<PdfDocument<'a>> {
+pub fn load_document(pdfium: &Pdfium, datasource: DataSource) -> Result<PdfDocument> {
     match datasource {
         DataSource::File(path) => {
             if !path.exists() {
                 return Err(anyhow::anyhow!("File not found: {}", path.display()));
             }
-            PDFIUM.load_pdf_from_file(path.to_string_lossy().as_ref(), None)
+            pdfium.load_pdf_from_file(path.to_string_lossy().as_ref(), None)
         }
         DataSource::Memory(bytes) => {
-            PDFIUM.load_pdf_from_bytes(bytes.as_slice(), None)
+            pdfium.load_pdf_from_bytes(bytes.as_slice(), None)
         }
     }
         .map_err(|e| anyhow::anyhow!("Failed to load PDF document: {:?}", e))
 }
 
+
 pub fn load_image(datasource: DataSource, i: usize, resize: Option<Resize>) -> Result<DynamicImage> {
     let config = resize.map(|ref r| r.into())
         .unwrap_or(PdfBitmapConfig::new());
-    let doc = load_document(datasource)?;
-    Ok(doc)
-        .and_then(|doc| doc.pages().get(i as PdfPageIndex))
-        .and_then(|page| page.get_bitmap_with_config(&config))
-        .map(|mut bitmap| bitmap.as_image())
-        .map_err(|e| anyhow::anyhow!("Failed to load page: {:?}", e))
+    let pdfium = make_library_binding();
+    let doc = load_document(&pdfium, datasource)?;
+    let pages = doc.pages();
+    let page = pages.get(i as PdfPageIndex)
+        .map_err(|e| anyhow::anyhow!("Page out of bounds"))?;
+    let mut bitmap = page.get_bitmap_with_config(&config)
+        .map_err(|e| anyhow::anyhow!("Failed to get bitmap: {:?}", e))?;
+    Ok(bitmap.as_image())
 }
 
 
-pub struct ExactSizePdfPageIterator<'a>{
-    pub pages: PdfPages<'a>,
-    pub next_index: PdfPageIndex,
-    pub page_count: PdfPageIndex,
-}
-
-
-impl<'a> Iterator for ExactSizePdfPageIterator<'a> {
-    type Item = PdfPage<'a>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.next_index >= self.page_count {
-            return None;
-        }
-        let next = self.pages.get(self.next_index);
-        self.next_index += 1;
-        match next {
-            Ok(next) => Some(next),
-            Err(_) => None,
-        }
-    }
-}
-
-impl<'a> ExactSizeIterator for ExactSizePdfPageIterator<'a> {
-    fn len(&self) -> usize {
-        self.page_count as usize
-    }
-}
-
-impl<'a> ExactSizePdfPageIterator<'a> {
-    pub fn new(pages: PdfPages<'a>) -> Self {
-        ExactSizePdfPageIterator {
-            pages,
-            next_index: 0,
-            page_count: pages.len(),
-        }
-    }
-}
-
-pub fn load_all_images(datasource: DataSource, resize: Option<Resize>) -> Result<Box<dyn ExactSizeIterator<Item=Result<DynamicImage>>>> {
+pub fn load_all_images(datasource: DataSource, resize: Option<Resize>) -> Result<Vec<DynamicImage>> {
     let config = resize.map(|ref r| r.into())
         .unwrap_or(PdfBitmapConfig::new());
-    let doc = load_document(datasource)?;
-
+    let pdfium = make_library_binding();
+    let doc = load_document(&pdfium, datasource)
+        .map_err(|e| anyhow::anyhow!("Failed to load PDF document: {:?}", e))?;
     let pages = doc.pages();
-    Ok(Box::new(ExactSizePdfPageIterator {
-        page_count: pages.len(),
-        next_index: 0,
-        pages,
-    }
-        .map(|page| page
-            .get_bitmap_with_config(&config)
-            .map(|mut bitmap| bitmap.as_image())
-            .map_err(|e| anyhow::anyhow!("Failed to load page: {:?}", e))
-        )
-    ))
+    pages.iter().map(|page| page
+        .get_bitmap_with_config(&config)
+        .map(|mut bitmap| bitmap.as_image())
+        .map_err(|e| anyhow::anyhow!("Failed to load page: {:?}", e))
+    ).collect()
 }

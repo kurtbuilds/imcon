@@ -1,5 +1,4 @@
 use std::io;
-use std::iter::once;
 use std::path::PathBuf;
 use crate::transform::{Resize, Transform};
 use anyhow::Result;
@@ -111,19 +110,18 @@ impl Image {
             DataSource::File(path) => path.clone(),
             DataSource::Memory(_) => PathBuf::from("stdin"),
         };
-        let iter = match self.format {
+        let images = match self.format {
             Format::Pdf => pdf::load_all_images(source, None)?,
-            Format::Heif => Box::new(once(heif::load_image(source, None))),
-            Format::Png => Box::new(once(image_rs::load_image(source, ::image::ImageFormat::Png))),
-            Format::Jpeg => Box::new(once(image_rs::load_image(source, ::image::ImageFormat::Jpeg))),
+            Format::Heif => vec![heif::load_image(source, None)?],
+            Format::Png => vec![image_rs::load_image(source, ::image::ImageFormat::Png)?],
+            Format::Jpeg => vec![image_rs::load_image(source, ::image::ImageFormat::Jpeg)?],
         };
-        for (i, mut image) in iter.enumerate() {
-            let mut image = image?;
+        let places = images.len();
+        for (i, mut image) in images.into_iter().enumerate() {
             if let Some(resize) = &resize {
                 let (width, height) = resize.calculate_dimensions(image.width(), image.height());
                 image = image.resize(width, height, FilterType::Lanczos3);
             }
-            let places = iter.len();
             let path = util::create_path(path_template, &input_fpath, i + 1, places);
             image.to_rgba8()
                 .save(path)
@@ -137,7 +135,8 @@ impl Image {
     }
 
     pub fn into_vec(self) -> Result<Vec<u8>> {
-        self.into_format(self.format)
+        let format = self.format;
+        self.into_format(format)
     }
 
     pub fn transform(self) -> Result<Image> {
