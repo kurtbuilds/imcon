@@ -93,7 +93,7 @@ fn main() -> Result<()> {
             im.set_height(height.parse()?);
         }
         if let Some(scale) = args.value_of("scale") {
-            im.scale(scale.parse()?);
+            im = im.scale(scale.parse()?);
         }
         if let Some(max_width) = args.value_of("max-width") {
             im.max_width(max_width.parse()?);
