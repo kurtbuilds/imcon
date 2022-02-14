@@ -1,5 +1,5 @@
 use std::path::{Path, PathBuf};
-use clap::{Arg, Args};
+use clap::{Arg};
 use imcon::{Image, Format, DataSource};
 use anyhow::Result;
 
@@ -8,7 +8,7 @@ const NAME: &str = env!("CARGO_PKG_NAME");
 
 
 fn input_format(input: &str, input_format: Option<&str>) -> Result<Format> {
-    if input.starts_with("#") && vec![4, 5, 7, 9].contains(&input.len()) {
+    if input.starts_with('#') && vec![4, 5, 7, 9].contains(&input.len()) {
         return Ok(Format::Png)
     }
     let ext = input_format.map(String::from).or_else(|| {

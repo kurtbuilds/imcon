@@ -19,7 +19,7 @@ pub fn create_heif_image(source: DataSource) -> Result<libheif_rs::Image, HeifEr
 }
 
 
-pub fn load_image(source: DataSource, resize: Option<Resize>) -> Result<DynamicImage> {
+pub fn load_image(source: DataSource, _resize: Option<Resize>) -> Result<DynamicImage> {
     let image = create_heif_image(source)?;
     let width = image.width(Channel::Interleaved).map_err(|e| anyhow::anyhow!("{}", e))?;
     let height = image.height(Channel::Interleaved).map_err(|e| anyhow::anyhow!("{}", e))?;

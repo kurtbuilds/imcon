@@ -55,13 +55,12 @@ pub fn load_document(pdfium: &Pdfium, datasource: DataSource) -> Result<PdfDocum
 
 
 pub fn load_image(datasource: DataSource, i: usize, resize: Option<Resize>) -> Result<DynamicImage> {
-    let config = resize.map(|ref r| r.into())
-        .unwrap_or(PdfBitmapConfig::new());
+    let config = resize.map(|ref r| r.into()).unwrap_or_default();
     let pdfium = make_library_binding();
     let doc = load_document(&pdfium, datasource)?;
     let pages = doc.pages();
     let page = pages.get(i as PdfPageIndex)
-        .map_err(|e| anyhow::anyhow!("Page out of bounds"))?;
+        .map_err(|_e| anyhow::anyhow!("Page out of bounds"))?;
     let mut bitmap = page.get_bitmap_with_config(&config)
         .map_err(|e| anyhow::anyhow!("Failed to get bitmap: {:?}", e))?;
     Ok(bitmap.as_image())
@@ -69,8 +68,7 @@ pub fn load_image(datasource: DataSource, i: usize, resize: Option<Resize>) -> R
 
 
 pub fn load_all_images(datasource: DataSource, resize: Option<Resize>) -> Result<Vec<DynamicImage>> {
-    let config = resize.map(|ref r| r.into())
-        .unwrap_or(PdfBitmapConfig::new());
+    let config = resize.map(|ref r| r.into()).unwrap_or_default();
     let pdfium = make_library_binding();
     let doc = load_document(&pdfium, datasource)
         .map_err(|e| anyhow::anyhow!("Failed to load PDF document: {:?}", e))?;

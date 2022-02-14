@@ -81,7 +81,7 @@ impl Image {
     //     Self::new(format, DataSource::Memory(Box::new(reader)), vec![])
     // }
 
-    pub fn read_unknown_format<S: io::Read>(reader: S) -> Self {
+    pub fn read_unknown_format<S: io::Read>(_reader: S) -> Self {
         unimplemented!()
     }
 
@@ -130,7 +130,7 @@ impl Image {
         Ok(())
     }
 
-    pub fn into_format(self, format: Format) -> Result<Vec<u8>> {
+    pub fn into_format(self, _format: Format) -> Result<Vec<u8>> {
         unimplemented!()
     }
 
@@ -167,7 +167,7 @@ impl Image {
         self
     }
 
-    pub fn scale(&mut self, scale: f32) -> &mut Self {
+    pub fn scale(mut self, scale: f32) -> Self {
         let resize = self.resize.get_or_insert(Resize::default());
         resize.scale = Some(scale);
         self
