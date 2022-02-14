@@ -29,7 +29,7 @@ Right now it's in a very early stage of development, but it's a work in progress
 Supported file types:
 
 - [x] PDF
-- [ ] HEIC - Work in progress
+- [x] HEIC
 - [ ] PNG
 - [ ] JPEG
 - [ ] TIFF
@@ -79,6 +79,8 @@ If you just need `imcon` and already have `pdfium`, you can install it with:
 
 # Roadmap
 
+- [x] Add support for PDF
+- [x] Add support for HEIC
 - [ ] Add support for PNG
 - [ ] Add support for JPEG
 - [ ] Add support for TIFF
@@ -86,15 +88,22 @@ If you just need `imcon` and already have `pdfium`, you can install it with:
 - [ ] Add support for BMP
 - [ ] Add support for ICO
 - [ ] Add support for SVG
-- [x] Add support for PDF
-- [ ] Add support for HEIC
 - [ ] Add support for WEBP
+- [ ] Add support for command line flags
+  - [ ] --in-place to replace input files in place.
+  - [ ] --verbose to print out what's happening.
+  - [ ] --lighten
+  - [ ] --darken
+  - [ ] --blur
+- [ ] Add support for metadata (i.e. print metadata instead of creating the image)
 - [ ] Support for using imcon as both a CLI and a library.
 - [ ] Build a Python wrapper library.
 - [ ] Build a Node wrapper library.
 - [ ] Build a Ruby wrapper library.
 - [ ] Write docs on target_width/height vs max_width/height.
 - [ ] Create a Brew formula for installing Pdfium.
+- [ ] Make build rules for libheif more flexible to diff versions of libheif.
+- [ ] Benchmarks on various conversion & image manip operations, compared to other Rust (or other) libs.
 
 # Contributing
 
@@ -108,3 +117,20 @@ Don't forget to give the project a star! Thanks again!
 3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
 4. Push to the Branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
+
+# Development Notes
+
+These are personal notes on solving problems in the repo, not written with public audience in mind.
+
+- What are operations you want on scaling images?
+    - Resize the image to a max side length.  (-W $size -H $size)
+    - Resize the image to a specific width. (-w $size)
+    - Resize the image to a specific height. (-h $size)
+
+- You might also want to just print metadata.
+  - width
+  - height
+  - # channels
+  - exif data
+  - # of pages
+- Resize the image 

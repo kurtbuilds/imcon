@@ -3,7 +3,7 @@ use std::iter::{repeat, repeat_with};
 use std::path::{Iter, PathBuf};
 use std::pin::Pin;
 use std::sync::Mutex;
-use image::{DynamicImage, RgbaImage, RgbImage};
+use image::{DynamicImage, GenericImage, ImageBuffer, RgbaImage, RgbImage};
 use lazy_static::lazy_static;
 use once_cell::sync::{Lazy, OnceCell};
 use pdfium_render::bitmap::PdfBitmap;
@@ -12,6 +12,7 @@ use pdfium_render::document::PdfDocument;
 use pdfium_render::page::PdfPage;
 use pdfium_render::pdfium::Pdfium;
 use std::sync::Once;
+use image::buffer::ConvertBuffer;
 use libheif_rs::{Channel, ColorSpace, HeifContext, HeifError, HeifErrorSubCode, RgbChroma};
 
 pub enum ImageData {
@@ -29,6 +30,16 @@ pub struct Image {
     max_height: Option<usize>,
     scale: Option<f32>,
 }
+
+pub struct ImageTransform {
+    target_width: Option<usize>,
+    target_height: Option<usize>,
+    max_width: Option<usize>,
+    max_height: Option<usize>,
+    scale: Option<f32>,
+}
+
+
 
 impl Into<PdfBitmapConfig> for &Image {
     fn into(self) -> PdfBitmapConfig {
@@ -88,6 +99,10 @@ impl Image {
         unimplemented!()
     }
 
+    pub fn save_all(&self, path: &str) {
+        unimplemented!()
+    }
+
     pub fn save_pages_to_path(&self, path_template: &str) -> Result<(), io::Error> {
         match self.inner {
             ImageData::Pdf => {
@@ -115,7 +130,6 @@ impl Image {
                 }).collect()
             }
             ImageData::Heif => {
-                println!("{}", self.input_path.to_string_lossy());
                 let image = read_heif_to_buffer(&self.input_path)
                     .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
                 let width = image.width(Channel::Interleaved)
@@ -134,19 +148,24 @@ impl Image {
 
                 let planes = image.planes();
                 let interleaved_plane = planes.interleaved.unwrap();
-                let pixel_size = interleaved_plane.bits_pre_pixel / 8 as usize;
+                let pixel_size = interleaved_plane.bits_pre_pixel / 8 as u8;
+                assert_eq!(pixel_size, 3);
 
                 let width = image.width(Channel::Interleaved)
                     .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
                 let height = image.height(Channel::Interleaved)
                     .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
 
-                let mut imgbuf = image::ImageBuffer::new(width, height);
-                imgbuf
-                // let path = create_path(path_template, &self.input_path, 0, 1);
-                // image.save(&path)
-                //     .map(|_| println!("{path}: Wrote file."))
-                //     .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+                let image = ImageBuffer::from_raw(width, height, interleaved_plane.data.to_owned())
+                    .map(DynamicImage::ImageBgra8)
+                    .unwrap()
+                    .to_rgba8()
+                    ;
+
+                let path = create_path(path_template, &self.input_path, 0, 1);
+                image.save(&path)
+                    .map(|_| println!("{path}: Wrote file."))
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
             }
         }
     }
