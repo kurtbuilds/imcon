@@ -1,125 +1,95 @@
+#![allow(unused)]
+mod cli;
+mod util;
+
 use std::path::{Path, PathBuf};
-use clap::{Arg};
-use imcon::{Image, Format, DataSource};
+use std::str::FromStr;
+use clap::Arg;
+use imcon::{DataSource, Format, Image};
 use anyhow::Result;
+use imcon::Format::Pdf;
+use crate::util::resolve_hex_color;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const NAME: &str = env!("CARGO_PKG_NAME");
 
 
-fn input_format(input: &str, input_format: Option<&str>) -> Result<Format> {
-    if input.starts_with('#') && vec![4, 5, 7, 9].contains(&input.len()) {
-        return Ok(Format::Png)
+/// Based on the command line inputs, infer the format of the input data.
+fn resolve_input_format(input: &str, input_format: Option<&str>) -> Result<Format> {
+    if let Some(format) = input_format {
+        return Format::from_str(format).map_err(|_| anyhow::anyhow!("Unknown input format"))
     }
-    let ext = input_format.map(String::from).or_else(|| {
-        let input = Path::new(input);
-        input.extension().map(|s| s.to_string_lossy().into_owned())
-    }).map(|s| s.to_lowercase())
-        .ok_or_else(|| anyhow::anyhow!("Could not determine input format"))?;
-    return Ok(match ext.as_ref() {
-        "pdf" => Format::Pdf,
-        "heic" => Format::Heif,
-        "jpeg" | "jpg" => Format::Jpeg,
-        "png" => Format::Png,
-        _ => { return Err(anyhow::anyhow!("Unrecognized file format: {}", ext)); }
+    if input.starts_with('#') && vec![4, 5, 7, 9].contains(&input.len()) {
+        return Ok(Format::Bmp)
+    }
+    if let Some(ext) = Path::new(input).extension() {
+        let ext = ext.to_string_lossy().to_lowercase();
+        return Format::from_str(&ext).map_err(|_| anyhow::anyhow!("Unknown input format"))
+    }
+    Err(anyhow::anyhow!("Could not determine input format."))
+}
+
+
+fn resolve_output_format(output_path: &Option<&str>, output_format: Option<&str>, input_format: Format) -> Result<Format> {
+    if let Some(output) = output_format {
+        return Format::from_str(output).map_err(|_| anyhow::anyhow!("Unknown output format"))
+    }
+    if let Some(output) = output_path {
+        if let Some(ext) = Path::new(output).extension() {
+            let ext = ext.to_string_lossy().to_lowercase();
+            return Format::from_str(&ext).map_err(|_| anyhow::anyhow!("Unknown output format"));
+        }
+    }
+    Ok(match input_format {
+        Format::Png => Format::Png,
+        Format::Jpeg => Format::Jpeg,
+        Format::Heif => Format::Jpeg,
+        Format::Pdf => Format::Png,
+        Format::Bmp => Format::Png,
     })
 }
 
-fn main() -> Result<()> {
-    let args = clap::App::new(NAME)
-        .version(VERSION)
-        .arg(Arg::new("input")
-            .help("Sets the input file to use")
-            .required(true)
-            .multiple_values(true)
-        )
-        .arg(Arg::new("output-format")
-            .long("output-format")
-            .help("Sets the output format")
-            .takes_value(true)
-            .conflicts_with("output")
-            .possible_values(&["png", "jpg", "jpeg"])
-        )
-        .arg(Arg::new("width")
-            .long("width")
-            .short('w')
-            .takes_value(true)
-        )
-        .arg(Arg::new("input-format")
-            .long("input-format")
-            .takes_value(true)
-        )
-        .arg(Arg::new("scale")
-            .long("scale")
-            .takes_value(true)
-        )
-        .arg(Arg::new("height")
-            .long("height")
-            .short('h')
-            .takes_value(true)
-        )
-        .arg(Arg::new("max-width")
-            .long("max-width")
-            .short('W')
-            .takes_value(true)
-        )
-        .arg(Arg::new("max-height")
-            .long("max-height")
-            .short('H')
-            .takes_value(true)
-        )
-        .arg(Arg::new("output")
-            .short('o')
-            .long("output")
-            .help("Sets the output file path to use. Use the following placeholders as needed:
-              '{}':   input file name without file extension
-              '{i}':  number of the output file (starting from 1).
-              '{dir}':  input file dir
-              '{filename}':  input file name with file extension
-            ")
-            .takes_value(true)
-            .conflicts_with("output-format")
-        )
-        .get_matches();
 
+
+fn main() -> Result<()> {
+    let args = cli::clap_app().get_matches();
+
+    let allow_overwrite = args.is_present("force");
     let input = args.values_of("input").unwrap();
-    for input in input {
-        let format = input_format(input, args.value_of("input-format"))?;
-        let mut im = Image::new(format, DataSource::File(PathBuf::from(input)));
+    for filepath in input {
+        let input_format = resolve_input_format(filepath, args.value_of("input-format"))?;
+
+        let mut im = Image::new(input_format, DataSource::File(PathBuf::from(filepath)));
+
         if let Some(width) = args.value_of("width") {
-            im.set_width(width.parse()?);
+            im = im.set_width(width.parse()?);
         }
         if let Some(height) = args.value_of("height") {
-            im.set_height(height.parse()?);
+            im = im.set_height(height.parse()?);
         }
         if let Some(scale) = args.value_of("scale") {
             im = im.scale(scale.parse()?);
         }
         if let Some(max_width) = args.value_of("max-width") {
-            im.max_width(max_width.parse()?);
+            im = im.max_width(max_width.parse()?);
         }
         if let Some(max_height) = args.value_of("max-height") {
-            im.max_height(max_height.parse()?);
+            im = im.max_height(max_height.parse()?);
         }
 
-        let output = args.value_of("output")
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| {
-            let path = Path::new(input);
-            let extension = args.value_of("format")
-                .unwrap_or_else(|| match path.extension()
-                    .map(|ext| ext.to_str().unwrap_or(""))
-                    .unwrap_or("")
-                    .to_lowercase()
-                    .as_ref() {
-                    "pdf" => "png",
-                    "heic" => "png",
-                    _ => "png",
-                }
-            );
-            format!("{}{{i}}.{}", path.file_stem().unwrap().to_string_lossy(), extension)
-        });
-        im.save_all(&output)?;
+        let output_path = args.value_of("output");
+        let output_format = resolve_output_format(
+            &output_path,
+            args.value_of("output-format"),
+            input_format
+        )?;
+        let path_template = output_path.map(String::from).unwrap_or_else(
+            || match input_format {
+                Format::Pdf => format!("{{}}_{{i}}.{}", output_format.as_str()),
+                _ => format!("{{}}.{}", output_format.as_str()),
+            }
+        );
+        im.save_all(&path_template, allow_overwrite)?;
     }
     Ok(())
 }

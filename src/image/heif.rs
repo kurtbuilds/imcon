@@ -26,6 +26,6 @@ pub fn load_image(source: DataSource, _resize: Option<Resize>) -> Result<Dynamic
     let planes = image.planes();
     let interleaved_plane = planes.interleaved.unwrap();
     ImageBuffer::from_raw(width, height, interleaved_plane.data.to_owned())
-        .map(DynamicImage::ImageBgra8)
+        .map(DynamicImage::ImageRgb8)
         .ok_or(anyhow::anyhow!("Failed to create image buffer"))
 }

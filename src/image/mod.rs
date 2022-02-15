@@ -1,9 +1,11 @@
-use std::io;
-use std::path::PathBuf;
+use std::{fs, io};
+use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use crate::transform::{Resize, Transform};
 use anyhow::Result;
-use image::GenericImageView;
+use image::{DynamicImage, GenericImageView, ImageBuffer};
 use ::image::imageops::FilterType;
+// use kmeans::{KMeans, KMeansConfig};
 
 mod pdf;
 mod heif;
@@ -16,6 +18,34 @@ pub enum Format {
     Heif,
     Png,
     Jpeg,
+    Bmp,
+}
+
+impl Format {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Format::Pdf => "pdf",
+            Format::Heif => "heic",
+            Format::Png => "png",
+            Format::Jpeg => "jpg",
+            Format::Bmp => "bmp",
+        }
+    }
+}
+
+
+impl FromStr for Format {
+    type Err = ();
+    fn from_str(input: &str) -> Result<Format, Self::Err> {
+        Ok(match input.to_lowercase().as_str() {
+            "png"  => Format::Png,
+            "pdf"  => Format::Pdf,
+            "jpeg" | "jpg" => Format::Jpeg,
+            "heic" => Format::Heif,
+            "bmp" => Format::Bmp,
+            _      => return Err(()),
+        })
+    }
 }
 
 
@@ -61,15 +91,9 @@ impl Image {
         let path = path.into();
         let ext = path.extension()
             .expect("No file extension or file extension unrecognized.")
-            .to_string_lossy()
-            .to_lowercase();
-        let format = match ext.as_ref() {
-            "png" => Format::Png,
-            "jpeg" | "jpg" => Format::Jpeg,
-            "pdf" => Format::Pdf,
-            "heif" => Format::Heif,
-            _ => panic!("File extension unrecognized."),
-        };
+            .to_string_lossy();
+        let format = Format::from_str(&ext)
+            .map_err(|e| anyhow::anyhow!("Unknown file extension: {}", ext))?;
         Ok(Self::new(format, DataSource::File(path)))
     }
 
@@ -86,25 +110,13 @@ impl Image {
     }
 
     pub fn save(self, path: &str) -> Result<()> {
-        let Image {source, resize, .. } = self;
-        let mut image = match self.format {
-            // TODO experiment with lib-specific resize instead of that from image-rthat from image-rs.
-            Format::Pdf => pdf::load_image(source, 0, None),
-            Format::Heif => heif::load_image(source, None),
-            Format::Png => image_rs::load_image(source, ::image::ImageFormat::Png),
-            Format::Jpeg => image_rs::load_image(source, ::image::ImageFormat::Jpeg),
-        }?;
-        if let Some(resize) = resize {
-            let (width, height) = resize.calculate_dimensions(image.width(), image.height());
-            image = image.resize(width, height, FilterType::Lanczos3);
-        }
-        image
+        self.to_image()?
             .to_rgba8()
             .save(path)
             .map_err(|e| anyhow::anyhow!("{}", e))
     }
 
-    pub fn save_all(self, path_template: &str) -> Result<()> {
+    pub fn save_all(self, path_template: &str, allow_overwrite: bool) -> Result<()> {
         let Image {source, resize, .. } = self;
         let input_fpath = match &source {
             DataSource::File(path) => path.clone(),
@@ -115,6 +127,7 @@ impl Image {
             Format::Heif => vec![heif::load_image(source, None)?],
             Format::Png => vec![image_rs::load_image(source, ::image::ImageFormat::Png)?],
             Format::Jpeg => vec![image_rs::load_image(source, ::image::ImageFormat::Jpeg)?],
+            Format::Bmp => vec![image_rs::load_image(source, ::image::ImageFormat::Bmp)?],
         };
         let places = images.len();
         for (i, mut image) in images.into_iter().enumerate() {
@@ -123,11 +136,31 @@ impl Image {
                 image = image.resize(width, height, FilterType::Lanczos3);
             }
             let path = util::create_path(path_template, &input_fpath, i + 1, places);
+            if fs::canonicalize(Path::new(&path))? == fs::canonicalize(&input_fpath)? && !allow_overwrite {
+                return Err(anyhow::anyhow!("Output file would overwrite input file. Use --force to override."));
+            }
             image.to_rgba8()
                 .save(path)
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
         }
         Ok(())
+    }
+
+    pub fn to_image(self) -> Result<DynamicImage> {
+        let Image {source, resize, .. } = self;
+        let mut image = match self.format {
+            // TODO experiment with lib-specific resize instead of that from image-rthat from image-rs.
+            Format::Pdf => pdf::load_image(source, 0, None),
+            Format::Heif => heif::load_image(source, None),
+            Format::Png => image_rs::load_image(source, ::image::ImageFormat::Png),
+            Format::Jpeg => image_rs::load_image(source, ::image::ImageFormat::Jpeg),
+            Format::Bmp => image_rs::load_image(source, ::image::ImageFormat::Bmp),
+        }?;
+        if let Some(resize) = resize {
+            let (width, height) = resize.calculate_dimensions(image.width(), image.height());
+            image = image.resize(width, height, FilterType::Lanczos3);
+        }
+        Ok(image)
     }
 
     pub fn into_format(self, _format: Format) -> Result<Vec<u8>> {
@@ -140,28 +173,32 @@ impl Image {
     }
 
     pub fn transform(self) -> Result<Image> {
-        unimplemented!()
+        let format = self.format;
+        let im = self.to_image()?;
+        let im = im.to_rgba8();
+        let vec = im.to_vec();
+        Ok(Self::new(format, DataSource::Memory(vec)))
     }
 
-    pub fn set_width(&mut self, width: usize) -> &mut Self {
+    pub fn set_width(mut self, width: usize) -> Self {
         let resize = self.resize.get_or_insert(Resize::default());
         resize.width = Some(width);
         self
     }
 
-    pub fn set_height(&mut self, height: usize) -> &mut Self {
+    pub fn set_height(mut self, height: usize) -> Self {
         let resize = self.resize.get_or_insert(Resize::default());
         resize.height = Some(height);
         self
     }
 
-    pub fn max_width(&mut self, max_width: usize) -> &mut Self {
+    pub fn max_width(mut self, max_width: usize) -> Self {
         let resize = self.resize.get_or_insert(Resize::default());
         resize.max_width = Some(max_width);
         self
     }
 
-    pub fn max_height(&mut self, max_height: usize) -> &mut Self {
+    pub fn max_height(mut self, max_height: usize) -> Self {
         let resize = self.resize.get_or_insert(Resize::default());
         resize.max_height = Some(max_height);
         self
@@ -171,5 +208,18 @@ impl Image {
         let resize = self.resize.get_or_insert(Resize::default());
         resize.scale = Some(scale);
         self
+    }
+
+    pub fn dominant_colors(self, n: usize) -> Result<Vec<(u8, u8, u8)>> {
+        unimplemented!()
+        // let im = self.to_image()?
+        //     .to_rgb8();
+        // let width = im.width();
+        // let height = im.height();
+        // let data = im.to_vec();
+        // let kmean = kmeans::KMeans::new(data, (width * height) as usize, 3);
+        // let result = kmean.kmeans_lloyd(n, 100, KMeans::init_kmeanplusplus, &KMeansConfig::default());
+        // assert_eq!(result.centroids.len(), n * 3);
+        // Ok(result.centroids.chunks(3).map(|c| (c[0], c[1], c[2])).collect())
     }
 }
