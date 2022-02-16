@@ -125,9 +125,9 @@ impl Image {
                 Format::Pdf => {
                     let Image { resize, transforms, .. } = self;
                     return pdf::transform_all_pages_from_path(
-                        &src_path, None, |i, n_pages, mut image| {
+                        &src_path, resize, |i, n_pages, mut image| {
                             let transforms = transforms.clone();
-                            let image = apply_transforms(image, resize, transforms)?;
+                            let image = apply_transforms(image, None, transforms)?;
                             let path = create_path(path_template, &src_path, i, n_pages);
                             image
                                 .save(&path)

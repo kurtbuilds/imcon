@@ -1,9 +1,10 @@
-use clap::Arg;
+use clap::{AppSettings, Arg};
 use crate::{NAME, VERSION};
 
 pub fn clap_app() -> clap::App<'static> {
     clap::App::new(NAME)
         .version(VERSION)
+        .setting(AppSettings::ArgRequiredElseHelp)
         .arg(Arg::new("input")
             .help("Sets the input file to use")
             .required(true)
@@ -52,11 +53,11 @@ pub fn clap_app() -> clap::App<'static> {
             .conflicts_with_all(&["width", "height", "max-width", "max-height", "scale", "output-format", "output"])
             .possible_values(&["all"])
         )
-        .arg(Arg::new("dominant")
-            .long("dominant")
-            .takes_value(true)
-            .conflicts_with_all(&["width", "height", "max-width", "max-height", "scale", "output-format", "output"])
-        )
+        // .arg(Arg::new("dominant")
+        //     .long("dominant")
+        //     .takes_value(true)
+        //     .conflicts_with_all(&["width", "height", "max-width", "max-height", "scale", "output-format", "output"])
+        // )
         .arg(Arg::new("output")
             .short('o')
             .long("output")
@@ -69,9 +70,9 @@ pub fn clap_app() -> clap::App<'static> {
             .takes_value(true)
             .conflicts_with("output-format")
         )
-        .arg(Arg::new("force")
-            .long("force")
-            .short('f')
-            .help("By default, imcon refuses to write files in place. Use this flag to override this behavior.")
-        )
+        // .arg(Arg::new("force")
+        //     .long("force")
+        //     .short('f')
+        //     .help("By default, imcon refuses to write files in place. Use this flag to override this behavior.")
+        // )
 }

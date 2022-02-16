@@ -1,3 +1,7 @@
+/// All of these functions have the option to do resizing in the Pdfium library, because
+/// PDFs can still contain vector graphics, so it can up-scale them much more smoothly.
+/// If you try to do up-scaling using imcon/image-rs library, you'll have blurry results,
+/// which is not good.
 use std::path::PathBuf;
 use pdfium_render::bitmap_config::PdfBitmapConfig;
 use pdfium_render::pdfium::Pdfium;
