@@ -5,10 +5,9 @@
 use std::path::PathBuf;
 use pdfium_render::bitmap_config::PdfBitmapConfig;
 use pdfium_render::pdfium::Pdfium;
-use crate::image::{DataSource};
 use crate::transform::{Resize};
 use anyhow::Result;
-use image::{DynamicImage};
+use ::image::{DynamicImage};
 use pdfium_render::pages::{PdfPageIndex};
 use pdfium_render::document::PdfDocument;
 

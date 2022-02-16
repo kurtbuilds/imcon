@@ -1,16 +1,13 @@
-use std::{fs, io};
-use std::path::{Path, PathBuf};
+use std::path::{PathBuf};
 use std::str::FromStr;
 use crate::transform::{Resize, Transform};
 use anyhow::Result;
-use image::{DynamicImage, GenericImageView, ImageBuffer};
+use ::image::{DynamicImage, ImageFormat};
 use ::image::imageops::FilterType;
-use libheif_rs::EncoderParameterType::String;
-use crate::image::util::create_path;
+use crate::util::create_path;
 
 mod pdf;
 mod heif;
-mod util;
 mod image_rs;
 
 #[derive(Copy, Clone, Debug)]
@@ -49,7 +46,21 @@ impl FromStr for Format {
     }
 }
 
+impl TryInto<ImageFormat> for Format {
+    type Error = anyhow::Error;
 
+    fn try_into(self) -> std::result::Result<ImageFormat, Self::Error> {
+        Ok(match self {
+            Format::Png => ImageFormat::Png,
+            Format::Jpeg => ImageFormat::Jpeg,
+            Format::Bmp => ImageFormat::Bmp,
+            _ => return Err(anyhow::anyhow!("Format unsupported by image-rs library.")),
+        })
+    }
+}
+
+
+#[allow(unused)]
 pub struct Metadata {
     width: usize,
     height: usize,
@@ -63,12 +74,22 @@ pub enum DataSource {
 }
 
 
+impl DataSource {
+    fn input_file(&self) -> Option<&PathBuf> {
+        match self {
+            DataSource::File(path, _) => Some(path),
+            _ => None,
+        }
+    }
+}
+
 /// a pdf can be opened from a file or from Vec<u8>
 /// an image can be opened from a file, buffer of pixels (Dynamic Image)
 
 
 pub struct Image {
     source: DataSource,
+    #[allow(unused)]
     metadata: Option<Metadata>,
 
     // Operations
@@ -104,7 +125,7 @@ impl Image {
             .expect("No file extension or file extension unrecognized.")
             .to_string_lossy();
         let format = Format::from_str(&ext)
-            .map_err(|e| anyhow::anyhow!("Unknown file extension: {}", ext))?;
+            .map_err(|_| anyhow::anyhow!("Unknown file extension: {}", ext))?;
         Ok(Self::new(DataSource::File(path, format)))
     }
 
@@ -125,7 +146,7 @@ impl Image {
                 Format::Pdf => {
                     let Image { resize, transforms, .. } = self;
                     return pdf::transform_all_pages_from_path(
-                        &src_path, resize, |i, n_pages, mut image| {
+                        &src_path, resize, |i, n_pages, image| {
                             let transforms = transforms.clone();
                             let image = apply_transforms(image, None, transforms)?;
                             let path = create_path(path_template, &src_path, i, n_pages);
@@ -135,23 +156,21 @@ impl Image {
                             Ok(())
                         });
                 }
-                _ => {},
+                _ => {}
             }
-            _ => {},
+            _ => {}
         };
-        Ok(())
+        let path = if let DataSource::File(ref src_path, ..) = self.source {
+            src_path.to_string_lossy().to_string()
+        } else {
+            "stdin".to_string()
+        };
+        self.save(path.as_ref())
     }
-        // let path = if let DataSource::File(ref src_path, ..) = self.source {
-        //     src_path.to_string_lossy().to_string()
-        // } else {
-        //     "stdin".to_string()
-        // };
-        // self.save(path.as_ref())
-    // }
 
     pub fn to_image(self) -> Result<DynamicImage> {
         let Image { source, resize, transforms, .. } = self;
-        let mut image = match source {
+        let image = match source {
             DataSource::File(path, format) => match format {
                 Format::Pdf => pdf::open_page(&path, 0, None)?,
                 Format::Heif => heif::open_image(&path, None)?,
@@ -207,16 +226,16 @@ impl Image {
         self
     }
 
-    pub fn dominant_colors(self, n: usize) -> Result<Vec<(u8, u8, u8)>> {
-        unimplemented!()
-        // let im = self.to_image()?
-        //     .to_rgb8();
-        // let width = im.width();
-        // let height = im.height();
-        // let data = im.to_vec();
-        // let kmean = kmeans::KMeans::new(data, (width * height) as usize, 3);
-        // let result = kmean.kmeans_lloyd(n, 100, KMeans::init_kmeanplusplus, &KMeansConfig::default());
-        // assert_eq!(result.centroids.len(), n * 3);
-        // Ok(result.centroids.chunks(3).map(|c| (c[0], c[1], c[2])).collect())
-    }
+    // pub fn dominant_colors(self, n: usize) -> Result<Vec<(u8, u8, u8)>> {
+    //     unimplemented!()
+    //     // let im = self.to_image()?
+    //     //     .to_rgb8();
+    //     // let width = im.width();
+    //     // let height = im.height();
+    //     // let data = im.to_vec();
+    //     // let kmean = kmeans::KMeans::new(data, (width * height) as usize, 3);
+    //     // let result = kmean.kmeans_lloyd(n, 100, KMeans::init_kmeanplusplus, &KMeansConfig::default());
+    //     // assert_eq!(result.centroids.len(), n * 3);
+    //     // Ok(result.centroids.chunks(3).map(|c| (c[0], c[1], c[2])).collect())
+    // }
 }

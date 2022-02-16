@@ -1,6 +1,6 @@
-#![allow(unused)]
 mod image;
 mod transform;
+mod util;
 
 pub use crate::image::{Image, Format, DataSource};
 

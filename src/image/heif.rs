@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 use image::{DynamicImage, ImageBuffer};
-use libheif_rs::{Channel, ColorSpace, HeifContext, HeifError, Image, RgbChroma};
-use crate::image::DataSource;
+use libheif_rs::{Channel, ColorSpace, HeifContext, RgbChroma};
 use anyhow::Result;
 use crate::transform::Resize;
 

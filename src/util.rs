@@ -1,8 +1,15 @@
 use std::path::PathBuf;
-use ::image::ImageBuffer;
-use imcon::{DataSource, Format, Image};
+use crate::image::{DataSource, Format, Image};
 use anyhow::Result;
 use image::{DynamicImage, Pixel, Rgb, Rgba, RgbaImage, RgbImage};
+
+
+pub fn create_path(path_template: &str, input_path: &PathBuf, page: usize, n_pages: usize) -> String {
+    let places = n_pages.to_string().len();
+    path_template
+        .replace("{}", input_path.file_stem().unwrap().to_string_lossy().as_ref())
+        .replace("{i}", format!("{:0places$}", page, places = places).as_ref())
+}
 
 /// Takes a string representing a hex_color.
 pub fn resolve_hex_color(mut hex_color: &str) -> anyhow::Result<Vec<u8>> {
