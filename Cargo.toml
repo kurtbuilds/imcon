@@ -10,7 +10,7 @@ description = "A simple image converter"
 [dependencies]
 anyhow = "1.0.53"
 clap = "3.0.13"
-image = "0.23.14"
+image = "0.24"
 kmeans = "0.2.0"
 lazy_static = "1.4.0"
 libheif-rs = "0.15.0"
