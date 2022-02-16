@@ -174,4 +174,22 @@ ax1.axis('off')
 plt.show(fig)
 
 
+    DataSource {
+        File(Path, Format),
+        Memory(Bytes, Format),
+        Image(::image::DynamicImage),
+    }
+
+    imcon::Image::open("foo.pdf").save_all_pages("foo.png")
+
+    imcon::open_all("foo.pdf") -> Result<Vec<Image>
+    
+    either we load the data or it's deferred.
+    
+    imcon::open_all("foo.pdf") -> Result<Vec<Image>>
+    
+    imcon::ImageComputation::open("foo.pdf").resize(1024, 1024).save_to_path_template
+    
+    you can save from a pdf.... ok fine.
+    
 ```

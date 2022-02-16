@@ -5,7 +5,8 @@ use crate::transform::{Resize, Transform};
 use anyhow::Result;
 use image::{DynamicImage, GenericImageView, ImageBuffer};
 use ::image::imageops::FilterType;
-// use kmeans::{KMeans, KMeansConfig};
+use libheif_rs::EncoderParameterType::String;
+use crate::image::util::create_path;
 
 mod pdf;
 mod heif;
@@ -38,12 +39,12 @@ impl FromStr for Format {
     type Err = ();
     fn from_str(input: &str) -> Result<Format, Self::Err> {
         Ok(match input.to_lowercase().as_str() {
-            "png"  => Format::Png,
-            "pdf"  => Format::Pdf,
+            "png" => Format::Png,
+            "pdf" => Format::Pdf,
             "jpeg" | "jpg" => Format::Jpeg,
             "heic" => Format::Heif,
             "bmp" => Format::Bmp,
-            _      => return Err(()),
+            _ => return Err(()),
         })
     }
 }
@@ -56,15 +57,18 @@ pub struct Metadata {
 
 
 pub enum DataSource {
-    File(PathBuf),
-    Memory(Vec<u8>),
+    File(PathBuf, Format),
+    Memory(Vec<u8>, Format),
+    Image(DynamicImage),
 }
 
 
-pub struct Image {
-    format: Format,
-    source: DataSource,
+/// a pdf can be opened from a file or from Vec<u8>
+/// an image can be opened from a file, buffer of pixels (Dynamic Image)
 
+
+pub struct Image {
+    source: DataSource,
     metadata: Option<Metadata>,
 
     // Operations
@@ -74,9 +78,8 @@ pub struct Image {
 
 
 impl Image {
-    pub fn new(format: Format, source: DataSource) -> Self {
+    pub fn new(source: DataSource) -> Self {
         Self {
-            format,
             source,
             metadata: None,
             resize: None,
@@ -86,6 +89,14 @@ impl Image {
 }
 
 
+fn apply_transforms(mut image: DynamicImage, resize: Option<Resize>, _transforms: Vec<Transform>) -> Result<DynamicImage> {
+    if let Some(resize) = resize {
+        let (width, height) = resize.calculate_dimensions(image.width(), image.height());
+        image = image.resize(width, height, FilterType::Lanczos3);
+    }
+    Ok(image)
+}
+
 impl Image {
     pub fn open<S: Into<PathBuf>>(path: S) -> Result<Self> {
         let path = path.into();
@@ -94,19 +105,11 @@ impl Image {
             .to_string_lossy();
         let format = Format::from_str(&ext)
             .map_err(|e| anyhow::anyhow!("Unknown file extension: {}", ext))?;
-        Ok(Self::new(format, DataSource::File(path)))
+        Ok(Self::new(DataSource::File(path, format)))
     }
 
     pub fn read(data: &[u8], format: Format) -> Result<Self> {
-        Ok(Self::new(format, DataSource::Memory(data.to_vec())))
-    }
-
-    // pub fn read<S: io::Read + 'static>(reader: S, format: Format) -> Self {
-    //     Self::new(format, DataSource::Memory(Box::new(reader)), vec![])
-    // }
-
-    pub fn read_unknown_format<S: io::Read>(_reader: S) -> Self {
-        unimplemented!()
+        Ok(Self::new(DataSource::Memory(data.to_vec(), format)))
     }
 
     pub fn save(self, path: &str) -> Result<()> {
@@ -116,68 +119,62 @@ impl Image {
             .map_err(|e| anyhow::anyhow!("{}", e))
     }
 
-    pub fn save_all(self, path_template: &str, allow_overwrite: bool) -> Result<()> {
-        let Image {source, resize, .. } = self;
-        let input_fpath = match &source {
-            DataSource::File(path) => path.clone(),
-            DataSource::Memory(_) => PathBuf::from("stdin"),
-        };
-        let images = match self.format {
-            Format::Pdf => pdf::load_all_images(source, None)?,
-            Format::Heif => vec![heif::load_image(source, None)?],
-            Format::Png => vec![image_rs::load_image(source, ::image::ImageFormat::Png)?],
-            Format::Jpeg => vec![image_rs::load_image(source, ::image::ImageFormat::Jpeg)?],
-            Format::Bmp => vec![image_rs::load_image(source, ::image::ImageFormat::Bmp)?],
-        };
-        let places = images.len();
-        for (i, mut image) in images.into_iter().enumerate() {
-            if let Some(resize) = &resize {
-                let (width, height) = resize.calculate_dimensions(image.width(), image.height());
-                image = image.resize(width, height, FilterType::Lanczos3);
+    pub fn save_every_image(self, path_template: &str) -> Result<()> {
+        match self.source {
+            DataSource::File(ref src_path, format) => match format {
+                Format::Pdf => {
+                    let Image { resize, transforms, .. } = self;
+                    return pdf::transform_all_pages_from_path(
+                        &src_path, None, |i, n_pages, mut image| {
+                            let transforms = transforms.clone();
+                            let image = apply_transforms(image, resize, transforms)?;
+                            let path = create_path(path_template, &src_path, i, n_pages);
+                            image
+                                .save(&path)
+                                .map_err(|e| anyhow::anyhow!("{}", e))?;
+                            Ok(())
+                        });
+                }
+                _ => {},
             }
-            let path = util::create_path(path_template, &input_fpath, i + 1, places);
-            if fs::canonicalize(Path::new(&path))? == fs::canonicalize(&input_fpath)? && !allow_overwrite {
-                return Err(anyhow::anyhow!("Output file would overwrite input file. Use --force to override."));
-            }
-            image.to_rgba8()
-                .save(path)
-                .map_err(|e| anyhow::anyhow!("{}", e))?;
-        }
+            _ => {},
+        };
         Ok(())
     }
+        // let path = if let DataSource::File(ref src_path, ..) = self.source {
+        //     src_path.to_string_lossy().to_string()
+        // } else {
+        //     "stdin".to_string()
+        // };
+        // self.save(path.as_ref())
+    // }
 
     pub fn to_image(self) -> Result<DynamicImage> {
-        let Image {source, resize, .. } = self;
-        let mut image = match self.format {
-            // TODO experiment with lib-specific resize instead of that from image-rthat from image-rs.
-            Format::Pdf => pdf::load_image(source, 0, None),
-            Format::Heif => heif::load_image(source, None),
-            Format::Png => image_rs::load_image(source, ::image::ImageFormat::Png),
-            Format::Jpeg => image_rs::load_image(source, ::image::ImageFormat::Jpeg),
-            Format::Bmp => image_rs::load_image(source, ::image::ImageFormat::Bmp),
-        }?;
-        if let Some(resize) = resize {
-            let (width, height) = resize.calculate_dimensions(image.width(), image.height());
-            image = image.resize(width, height, FilterType::Lanczos3);
-        }
-        Ok(image)
+        let Image { source, resize, transforms, .. } = self;
+        let mut image = match source {
+            DataSource::File(path, format) => match format {
+                Format::Pdf => pdf::open_page(&path, 0, None)?,
+                Format::Heif => heif::open_image(&path, None)?,
+                other_format => image_rs::open_image(&path, other_format)?,
+            }
+            DataSource::Memory(data, format) => match format {
+                Format::Pdf => pdf::read_page(&data, 0, None)?,
+                Format::Heif => heif::read_image(&data, None)?,
+                other_format => image_rs::read_image(data, other_format)?,
+            },
+            DataSource::Image(im) => im
+        };
+        apply_transforms(image, resize, transforms)
     }
 
-    pub fn into_format(self, _format: Format) -> Result<Vec<u8>> {
-        unimplemented!()
-    }
-
-    pub fn into_vec(self) -> Result<Vec<u8>> {
-        let format = self.format;
-        self.into_format(format)
-    }
-
-    pub fn transform(self) -> Result<Image> {
-        let format = self.format;
+    pub fn apply(self) -> Result<Image> {
         let im = self.to_image()?;
-        let im = im.to_rgba8();
-        let vec = im.to_vec();
-        Ok(Self::new(format, DataSource::Memory(vec)))
+        Ok(Self {
+            source: DataSource::Image(im),
+            metadata: None,
+            resize: None,
+            transforms: vec![],
+        })
     }
 
     pub fn set_width(mut self, width: usize) -> Self {

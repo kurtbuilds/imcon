@@ -1,20 +1,37 @@
-use std::io::Cursor;
+use std::fs::File;
+use std::io::{BufReader, Cursor};
+use std::path::PathBuf;
 use ::image as image_rs;
-use image::DynamicImage;
+use image::{DynamicImage, ImageFormat};
 use crate::image::DataSource;
 use anyhow::Result;
+use crate::Format;
 
 
-pub fn load_image(source: DataSource, format: image_rs::ImageFormat) -> Result<DynamicImage> {
-    match source {
-        DataSource::File(path) => image_rs::open(path),
-        DataSource::Memory(reader) => {
-            let mut reader = image_rs::io::Reader::new(
-                Cursor::new(reader)
-            );
-            reader.set_format(format);
-            reader.decode()
-        }
+impl TryInto<image_rs::ImageFormat> for Format {
+    type Error = anyhow::Error;
+
+    fn try_into(self) -> std::result::Result<ImageFormat, Self::Error> {
+        Ok(match self {
+            Format::Png => image_rs::ImageFormat::Png,
+            Format::Jpeg => image_rs::ImageFormat::Jpeg,
+            Format::Bmp => image_rs::ImageFormat::Bmp,
+            _ => return Err(anyhow::anyhow!("Format unsupported by image-rs library.")),
+        })
     }
+}
+
+pub fn open_image(path: &PathBuf, format: Format) -> Result<DynamicImage> {
+    let format = format.try_into()?;
+    let f = File::open(path)?;
+    let f = BufReader::new(f);
+    ::image::load(f, format)
+        .map_err(|e| anyhow::anyhow!("{}", e))
+}
+
+pub fn read_image(data: Vec<u8>, format: Format) -> Result<DynamicImage> {
+    let format = format.try_into()?;
+    let f = Cursor::new(data);
+    ::image::load(f, format)
         .map_err(|e| anyhow::anyhow!("{}", e))
 }

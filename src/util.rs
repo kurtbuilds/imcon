@@ -39,7 +39,7 @@ pub fn resolve_image(input: &str, input_format: Format) -> Result<Image> {
         };
         let im = image.to_rgba8().to_vec();
         // TODO: This isn't right... Need to figure out a better way to represent these.
-        return Ok(Image::new(input_format, DataSource::Memory(im)));
+        return Ok(Image::new(DataSource::Memory(im, input_format)));
     }
-    Ok(Image::new(input_format, DataSource::File(PathBuf::from(input))))
+    Ok(Image::new(DataSource::File(PathBuf::from(input), input_format)))
 }

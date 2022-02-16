@@ -1,4 +1,4 @@
-#[derive(Default)]
+#[derive(Default, Copy, Clone)]
 pub struct Resize {
     pub width: Option<usize>,
     pub height: Option<usize>,
@@ -47,5 +47,6 @@ impl Resize {
     }
 }
 
+#[derive(Clone)]
 pub enum Transform {
 }

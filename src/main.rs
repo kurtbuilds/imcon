@@ -59,7 +59,7 @@ fn main() -> Result<()> {
     for filepath in input {
         let input_format = resolve_input_format(filepath, args.value_of("input-format"))?;
 
-        let mut im = Image::new(input_format, DataSource::File(PathBuf::from(filepath)));
+        let mut im = Image::new(DataSource::File(PathBuf::from(filepath), input_format));
 
         if let Some(width) = args.value_of("width") {
             im = im.set_width(width.parse()?);
@@ -89,7 +89,7 @@ fn main() -> Result<()> {
                 _ => format!("{{}}.{}", output_format.as_str()),
             }
         );
-        im.save_all(&path_template, allow_overwrite)?;
+        im.save_every_image(&path_template)?;
     }
     Ok(())
 }
