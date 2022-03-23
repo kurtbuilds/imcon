@@ -153,7 +153,7 @@ impl Image {
                             image
                                 .save(&path)
                                 .map_err(|e| anyhow::anyhow!("{}", e))?;
-                            Ok(())
+                            return Ok(())
                         });
                 }
                 _ => {}
@@ -161,7 +161,7 @@ impl Image {
             _ => {}
         };
         let path = if let DataSource::File(ref src_path, ..) = self.source {
-            src_path.to_string_lossy().to_string()
+            create_path(path_template, &src_path, 1, 1)
         } else {
             "stdin".to_string()
         };

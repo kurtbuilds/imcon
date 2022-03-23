@@ -27,7 +27,7 @@ fn resolve_input_format(input: &str, input_format: Option<&str>) -> Result<Forma
         return Ok(Format::Bmp);
     }
     if let Some(ext) = Path::new(input).extension() {
-        let ext = ext.to_string_lossy().to_lowercase();
+        let ext = ext.to_string_lossy();
         return Format::from_str(&ext).map_err(|_| anyhow::anyhow!("Unknown input format"));
     }
     Err(anyhow::anyhow!("Could not determine input format."))
