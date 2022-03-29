@@ -65,6 +65,7 @@ instructions makes that library available.
     # which (should be) owned by root. This script is tiny
     # enough that you can read it if you're especially worried 
     # about security.
+    brew install libheif
     just install_with_library
 
 > **Note:** if you don't already have `just`, install it with `cargo install just`.
